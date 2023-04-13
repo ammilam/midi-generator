@@ -1,4 +1,7 @@
-const { Scale, Midi } = require("tonal");
+const {
+  Scale,
+  Midi
+} = require("tonal");
 const MidiWriter = require('midi-writer-js');
 const fs = require('fs');
 const yargs = require('yargs');
@@ -47,44 +50,44 @@ function getNotesPerBeat(noteDuration) {
     // whole note
     case "1":
       return 0.25
-    // half note
+      // half note
     case "2":
       return 0.5
-    // dotted half note
+      // dotted half note
     case "d2":
       return 0.875
-    // quarter note
+      // quarter note
     case "4":
       return 1
-    // triplet quarter note
+      // triplet quarter note
     case "4t":
       return 1.5
-    // dotted quarter note
+      // dotted quarter note
     case "d4":
       return 1.5
     case "dd4":
       return 1.75
-    // eighth note
+      // eighth note
     case "8":
       return 2
-    // triplet eighth note
+      // triplet eighth note
     case "8t":
       return 3
-    // dotted eighth note
+      // dotted eighth note
     case "d8":
       return 3
     case "dd8":
       return 3.5
-    // sixteenth note
+      // sixteenth note
     case "16":
       return 4
-    // triplet sixteenth note
+      // triplet sixteenth note
     case "16t":
       return 6
-    // thirty-second note
+      // thirty-second note
     case "32":
       return 8
-    // sixty-fourth note
+      // sixty-fourth note
     case "64":
       return 16
   }
@@ -138,7 +141,13 @@ const generateMidiStream = argv.generate_midi_stream || "false";
 var easymidi = require('easymidi');
 
 var outputs = easymidi.getOutputs();
-var output = new easymidi.Output(outputs[0]);
+if (outputs.length === 0) {
+
+  console.log('No outputs found!, initializing one');
+  output = new easymidi.Output('Midi Generator', true);
+} else {
+  var output = new easymidi.Output(outputs);
+}
 // var output = new easymidi.Output('Midi Generator', true);
 output.send('clock');
 output.send('start');
@@ -176,7 +185,10 @@ async function sendMidi(notes, velocity, channel, noteDuration) {
 function randomIndex(items) {
   let note = items[items.length * Math.random() | 0];
   let midiNote = Midi.toMidi(note)
-  let obj = { note, midiNote }
+  let obj = {
+    note,
+    midiNote
+  }
   return obj
 }
 
@@ -194,7 +206,10 @@ const randomNote = (range) => {
     notes.push(note)
     midiNotes.push(midi)
   }
-  return { notes, midiNotes };
+  return {
+    notes,
+    midiNotes
+  };
 };
 
 // initialize a new midi track
@@ -227,9 +242,7 @@ const randomDuration = () => {
 async function streamMidi() {
   while (true) {
     for (
-      let measure = 0;
-      measure < phraseNotesCount / notesPerMeasure;
-      measure++
+      let measure = 0; measure < phraseNotesCount / notesPerMeasure; measure++
     ) {
       for (let noteIndex = 0; noteIndex < notesPerMeasure; noteIndex++) {
         const randomNotes = randomNote(keyRange);
@@ -250,7 +263,7 @@ async function streamMidi() {
 process.on('SIGINT', () => {
   output.send('stop');
   process.exit(0)
-});  // CTRL+C
+}); // CTRL+C
 process.on('SIGQUIT', () => {
   output.send('stop');
   process.exit(0)
@@ -276,8 +289,7 @@ if (generateMidiStream == "true") {
           velocity: velocity,
         })
       );
-    }
-    )
+    })
   }
 }
 // add notes to the track
