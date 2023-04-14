@@ -143,9 +143,14 @@ var easymidi = require('easymidi');
 const prompt = require('prompt-sync')()
 
 var outputs = easymidi.getOutputs();
+console.log(outputs)
+
+// if no outputs are found, create one
 if (outputs.length === 0) {
   console.log('No outputs found!, initializing one');
   output = new easymidi.Output('Midi Generator', true);
+
+  // if more than one is found, use that one
 } else if (outputs.length > 1) {
   console.log('Multiple outputs found!, please select one');
   for (let i = 0; i < outputs.length; i++) {
@@ -155,10 +160,10 @@ if (outputs.length === 0) {
   const selectedOutput = prompt('Select an output: ');
   select = Number(selectedOutput) - 1;
   var output = new easymidi.Output(outputs[select]);
-  console.log(output)
-
+  
+// if only one is found, use that one
 } else {
-  var output = new easymidi.Output(outputs);
+  var output = new easymidi.Output(outputs[0]);
 }
 // var output = new easymidi.Output('Midi Generator', true);
 output.send('clock');
@@ -274,14 +279,20 @@ async function streamMidi() {
 // handle process signals
 process.on('SIGINT', () => {
   output.send('stop');
+  output.send('reset');
+  output.close();
   process.exit(0)
 }); // CTRL+C
 process.on('SIGQUIT', () => {
   output.send('stop');
+  output.send('reset');
+  output.close();
   process.exit(0)
 }); // Keyboard quit
 process.on('SIGTERM', () => {
   output.send('stop');
+  output.send('reset');
+  output.close();
   process.exit(0)
 }); // `kill` command
 
