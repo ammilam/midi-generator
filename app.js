@@ -140,11 +140,23 @@ const generateMidiStream = argv.generate_midi_stream || "false";
 
 var easymidi = require('easymidi');
 
+const prompt = require('prompt-sync')()
+
 var outputs = easymidi.getOutputs();
 if (outputs.length === 0) {
-
   console.log('No outputs found!, initializing one');
   output = new easymidi.Output('Midi Generator', true);
+} else if (outputs.length > 1) {
+  console.log('Multiple outputs found!, please select one');
+  for (let i = 0; i < outputs.length; i++) {
+    let number = i + 1;
+    console.log(`${number} - ${outputs[i]}`);
+  }
+  const selectedOutput = prompt('Select an output: ');
+  select = Number(selectedOutput) - 1;
+  var output = new easymidi.Output(outputs[select]);
+  console.log(output)
+
 } else {
   var output = new easymidi.Output(outputs);
 }

@@ -12,6 +12,7 @@
     "easymidi": "^3.0.1",
     "midi-writer-js": "^2.1.4",
     "pkg": "^5.8.1",
+    "prompt-sync": "^4.2.0",
     "tonal": "^4.14.0",
     "yargs": "^17.7.1"
   },
