@@ -7,46 +7,85 @@ const MidiWriter = require('midi-writer-js');
 const fs = require('fs');
 const yargs = require('yargs');
 const hideBin = require('yargs/helpers').hideBin;
+const easymidi = require('easymidi');
+const prompt = require('prompt-sync')();
 
-const argv = yargs(hideBin(process.argv)).argv
+const argv = parseCommandLineArguments();
+
+const {
+  noteSpread,
+  bpm,
+  phraseCount,
+  playChords,
+  velocity,
+  channel,
+  phraseNotesCount,
+  noteLengths,
+  timeSignature,
+  minOctave,
+  maxOctave,
+  skipNotesChance,
+  key,
+  mode,
+  scale,
+  chords,
+  keyRange,
+  fileName,
+  outputPath,
+  generateMidiStream
+} = argv;
+
+const track = new MidiWriter.Track()
+track.setTempo(bpm);
+
+function parseCommandLineArguments() {
+  const argv = yargs(hideBin(process.argv)).argv;
+
+  return {
+    noteSpread: argv.note_spread || 1,
+    bpm: argv.bpm || 120,
+    phraseCount: argv.phrase_count || 1,
+    playChords: argv.play_chords || false,
+    velocity: Number(argv.velocity) || 127,
+    channel: Number(argv.midi_channel) || 1,
+    phraseNotesCount: argv.phrase_notes_count || 32,
+    noteLengths: [(argv.note_durations || "16")].map(l => `${l}`),
+    timeSignature: argv.time_signature || "4/4",
+    minOctave: argv.min_octave || 1,
+    maxOctave: argv.max_octave || 5,
+    skipNotesChance: parseFloat(argv.skip_notes_chance) || parseFloat(0.0),
+    key: argv.key || "C",
+    mode: argv.mode || "major",
+    scale: `${argv.key || "C"} ${argv.mode || "major"}`,
+    chords: Scale.scaleChords(`${argv.key || "C"} ${argv.mode || "major"}`),
+    keyRange: Scale.rangeOf(`${argv.key || "C"} ${argv.mode || "major"}`)(`${argv.key || "C"}${argv.min_octave || 1}`, `${argv.key || "C"}${argv.max_octave || 5}`),
+    fileName: argv.file_name || `${argv.key || "C"}-${argv.mode || "major"}-midi-file-${(new Date()).toISOString()}.mid`,
+    outputPath: argv.output_path || './',
+    generateMidiStream: argv.generate_midi_stream || "false"
+  };
+}
+
+function printConfiguration() {
+  console.log(`bpm: ${bpm}`);
+  console.log(`phrase count: ${phraseCount}`);
+  console.log(`velocity: ${velocity}`);
+  console.log(`midi channel: ${channel}`);
+  console.log(`phrase notes count: ${phraseNotesCount}`);
+  console.log(`note lengths: ${noteLengths}`);
+  console.log(`time signature: ${timeSignature}`);
+  console.log(`min octave: ${minOctave}`);
+  console.log(`max octave: ${maxOctave}`);
+  console.log(`skip beats chance: ${(skipNotesChance * 100).toFixed(2)}%`);
+  console.log(`scale: ${scale}`);
+  console.log(`key range: ${keyRange}`);
+}
+
+printConfiguration();
 
 // sleep function
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-// get current date
-const date = new Date();
-const dateStr = date.toISOString()
-
-// corresponds to how many notes can potentially sit on top of each other, potentially representing a chord
-const noteSpread = argv.note_spread || 1;
-
-// set bpm
-const bpm = argv.bpm || 120;
-console.log(`bpm: ${bpm}`)
-
-// set phrase count
-const phraseCount = argv.phrase_count || 1;
-console.log(`phrase count: ${phraseCount}`)
-
-const playChords = argv.play_chords || false;
-
-// set velocity
-const velocity = Number(argv.velocity) || 127
-console.log(`velocity: ${velocity}`)
-
-//
-const channel = Number(argv.midi_channel) || 1
-console.log(`midi channel: ${channel}`)
-
-// set phrase length
-const phraseNotesCount = argv.phrase_notes_count || 32;
-console.log(`phrase notes count: ${phraseNotesCount}`)
-
-// set note lengths
-const noteLengths = [(argv.note_durations || "16")].map(l => `${l}`)
-console.log(`note lengths: ${noteLengths}`)
-
 function getNotesPerBeat(noteDuration) {
   switch (noteDuration) {
     // whole note
@@ -96,7 +135,6 @@ function getNotesPerBeat(noteDuration) {
 }
 // get command line arguments
 
-const timeSignature = argv.time_signature || "4/4";
 console.log(`time signature: ${timeSignature}`)
 const timeSignatureArr = timeSignature.split("/")
 const timeSignatureTop = timeSignatureArr[0]
@@ -106,27 +144,12 @@ const notesPerMeasure = timeSignatureTop * notesPerBeat
 console.log(`notes per measure: ${notesPerMeasure}`)
 
 
-// set octave range
-const minOctave = argv.min_octave || 1;
-console.log(`min octave: ${minOctave}`)
-const maxOctave = argv.max_octave || 5;
-console.log(`max octave: ${maxOctave}`)
-
 // set skip beats chance
 // set to float
 
-const skipNotesChance = parseFloat(argv.skip_notes_chance) || parseFloat(0.0);
 const percentage = (skipNotesChance * 100).toFixed(2)
 console.log(`skip beats chance: ${percentage}%`)
-// set key and mode
-const key = argv.key || "C";
-const mode = argv.mode || "major";
 
-// set scale
-const scale = `${key} ${mode}`
-console.log(`scale: ${scale}`)
-
-const chords = Scale.scaleChords(scale);
 
 // function that selects a random chord from the chords const
 function getRandomChord() {
@@ -154,23 +177,6 @@ function getRandomChord() {
   }
 }
 
-// get range of notes in a scale
-const range = Scale.rangeOf(scale);
-
-// get a range of notes of the scale
-const keyRange = range(`${key}${minOctave}`, `${key}${maxOctave}`)
-console.log(`key range: ${keyRange}`)
-
-// set file name
-const fileName = argv.file_name || `${key}-${mode}-midi-file-${dateStr}.mid`
-// set output path
-let outputPath = argv.output_path || './'
-
-const generateMidiStream = argv.generate_midi_stream || "false";
-
-var easymidi = require('easymidi');
-
-const prompt = require('prompt-sync')()
 
 var outputs = easymidi.getOutputs();
 
@@ -264,9 +270,6 @@ const randomNote = (range) => {
   };
 };
 
-// initialize a new midi track
-const track = new MidiWriter.Track()
-track.setTempo(bpm)
 
 // generate a beat
 function generateBeat() {
