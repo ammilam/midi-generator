@@ -1,6 +1,7 @@
 const {
   Scale,
-  Midi
+  Midi,
+  Chord
 } = require("tonal");
 const MidiWriter = require('midi-writer-js');
 const fs = require('fs');
@@ -28,6 +29,8 @@ console.log(`bpm: ${bpm}`)
 const phraseCount = argv.phrase_count || 1;
 console.log(`phrase count: ${phraseCount}`)
 
+const playChords = argv.play_chords || false;
+
 // set velocity
 const velocity = Number(argv.velocity) || 127
 console.log(`velocity: ${velocity}`)
@@ -43,7 +46,6 @@ console.log(`phrase notes count: ${phraseNotesCount}`)
 // set note lengths
 const noteLengths = [(argv.note_durations || "16")].map(l => `${l}`)
 console.log(`note lengths: ${noteLengths}`)
-
 
 function getNotesPerBeat(noteDuration) {
   switch (noteDuration) {
@@ -124,6 +126,34 @@ const mode = argv.mode || "major";
 const scale = `${key} ${mode}`
 console.log(`scale: ${scale}`)
 
+const chords = Scale.scaleChords(scale);
+
+// function that selects a random chord from the chords const
+function getRandomChord() {
+  const randomOctave = Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
+  const randomChord = chords[Math.floor(Math.random() * chords.length)];
+  console.log(randomChord)
+  let chordNotes = Chord.getChord(randomChord, key)['notes']
+  let chordMidiNotes = []
+  // pick a random set of notes from chordNotes with a min of 1 and max of noteSpread
+  const randomNoteCount = Math.floor(Math.random() * (noteSpread - 1 + 1)) + 1;
+  console.log(`random note count: ${randomNoteCount}`)
+  let randomChordNotes = []
+  // pick random notes from chordNotes
+  for (let i = 0; i < randomNoteCount; i++) {
+    let randomNote = chordNotes[Math.floor(Math.random() * chordNotes.length)];
+    randomChordNotes.push(randomNote)
+  }
+  for (note of randomChordNotes) {
+    let midiNote = Midi.toMidi(`${note}${randomOctave}`)
+    chordMidiNotes.push(midiNote)
+  }
+  return {
+    randomChordNotes,
+    chordMidiNotes
+  }
+}
+
 // get range of notes in a scale
 const range = Scale.rangeOf(scale);
 
@@ -143,7 +173,6 @@ var easymidi = require('easymidi');
 const prompt = require('prompt-sync')()
 
 var outputs = easymidi.getOutputs();
-console.log(outputs)
 
 // if no outputs are found, create one
 if (outputs.length === 0) {
@@ -179,23 +208,26 @@ function getNoteDurationInMs(noteDuration) {
 // function that sends midi notes
 async function sendMidi(midiNotes, notes, velocity, channel, noteDuration) {
   console.log(`midi => ${[midiNotes]} (${[notes]})`);
-
-  for (const midiNote of midiNotes) {
-    // send midi note on signal
+  // send midi note on signals for all notes in the chord simultaneously
+  midiNotes.forEach((midiNote) => {
     output.send("noteon", {
       note: midiNote,
       velocity: velocity,
       channel: channel,
     });
+  });
 
-    // send note off signal after noteDuration time is reached
-    await sleep(noteDuration);
+  // wait for the noteDuration time
+  await sleep(noteDuration);
+
+  // send note off signals for all notes in the chord simultaneously
+  midiNotes.forEach((midiNote) => {
     output.send("noteoff", {
       note: midiNote,
       velocity: velocity,
       channel: channel,
     });
-  }
+  });
 }
 
 // function that creates randomly sized smaller arrays that fluctuate in length between 1 and the noteSpread value
@@ -211,21 +243,24 @@ function randomIndex(items) {
 
 // function that returns a random note from a range
 const randomNote = (range) => {
-  let notes = []
-  let midiNotes = []
+  let notes = [];
+  let midiNotes = [];
   // variable that sets to a random value between 1 and the noteSpread value
-  const ns = Math.floor(Math.random() * (noteSpread - 1 + 1)) + 1;
+  const ns = noteSpread;
   // loop through the noteSpread value and push a random note to the notes array
+  
   for (let i = 0; i < ns; i++) {
-    let res = randomIndex(range)
-    let note = res['note']
-    let midi = res['midiNote']
-    notes.push(note)
-    midiNotes.push(midi)
+    if (i === 0 || Math.random() < 1 / ns) {
+      let res = randomIndex(range);
+      let note = res["note"];
+      let midi = res["midiNote"];
+      notes.push(note);
+      midiNotes.push(midi);
+    }
   }
   return {
     notes,
-    midiNotes
+    midiNotes,
   };
 };
 
@@ -262,9 +297,10 @@ async function streamMidi() {
       let measure = 0; measure < phraseNotesCount / notesPerMeasure; measure++
     ) {
       for (let noteIndex = 0; noteIndex < notesPerMeasure; noteIndex++) {
+        const randomChord = getRandomChord()
         const randomNotes = randomNote(keyRange);
-        const midiNotes = randomNotes["midiNotes"];
-        const notes = randomNotes["notes"];
+        const midiNotes = playChords === true ? randomChord['chordMidiNotes'] : randomNotes["midiNotes"];
+        const notes = playChords === true ? randomChord['randomChordNotes'] : randomNotes["notes"];
         const noteDuration = getNoteDurationInMs(randomDuration());
         if (!shouldSkipBeat()) {
           await sendMidi(midiNotes, notes, velocity, channel, noteDuration);
