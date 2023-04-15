@@ -276,24 +276,29 @@ async function streamMidi() {
   }
 }
 
+function kill() {
+  for (let i = 0; i < 127; i++) {
+    console.log(i)
+    output.send("noteoff", {
+      note: i + 1,
+      velocity: 0,
+      channel: channel,
+    });
+  }
+  output.send('stop');
+  process.exit(0)
+}
+
+
 // handle process signals
 process.on('SIGINT', () => {
-  output.send('stop');
-  output.send('reset');
-  output.close();
-  process.exit(0)
+  kill()
 }); // CTRL+C
 process.on('SIGQUIT', () => {
-  output.send('stop');
-  output.send('reset');
-  output.close();
-  process.exit(0)
+  kill()
 }); // Keyboard quit
 process.on('SIGTERM', () => {
-  output.send('stop');
-  output.send('reset');
-  output.close();
-  process.exit(0)
+  kill()
 }); // `kill` command
 
 // check if the user wants to generate a midi stream
