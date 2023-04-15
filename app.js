@@ -278,7 +278,6 @@ async function streamMidi() {
 
 function kill() {
   for (let i = 0; i < 127; i++) {
-    console.log(i)
     output.send("noteoff", {
       note: i + 1,
       velocity: 0,
@@ -289,6 +288,10 @@ function kill() {
   process.exit(0)
 }
 
+//detect when the enter key is pressed
+// process.stdin.setRawMode(true);
+// process.stdin.resume();
+// const skip = process.stdin.on('data', () => { return true }) || false
 
 // handle process signals
 process.on('SIGINT', () => {
@@ -299,7 +302,7 @@ process.on('SIGQUIT', () => {
 }); // Keyboard quit
 process.on('SIGTERM', () => {
   kill()
-}); // `kill` command
+}); 
 
 // check if the user wants to generate a midi stream
 if (generateMidiStream == "true") {
