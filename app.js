@@ -177,13 +177,13 @@ function getNoteDurationInMs(noteDuration) {
 }
 
 // function that sends midi notes
-async function sendMidi(notes, velocity, channel, noteDuration) {
-  console.log(`midi => ${[notes]}`);
+async function sendMidi(midiNotes, notes, velocity, channel, noteDuration) {
+  console.log(`midi => ${[midiNotes]} (${[notes]})`);
 
-  for (const note of notes) {
+  for (const midiNote of midiNotes) {
     // send midi note on signal
     output.send("noteon", {
-      note: note,
+      note: midiNote,
       velocity: velocity,
       channel: channel,
     });
@@ -191,7 +191,7 @@ async function sendMidi(notes, velocity, channel, noteDuration) {
     // send note off signal after noteDuration time is reached
     await sleep(noteDuration);
     output.send("noteoff", {
-      note: note,
+      note: midiNote,
       velocity: velocity,
       channel: channel,
     });
@@ -218,7 +218,7 @@ const randomNote = (range) => {
   // loop through the noteSpread value and push a random note to the notes array
   for (let i = 0; i < ns; i++) {
     let res = randomIndex(range)
-    let note = res['notes']
+    let note = res['note']
     let midi = res['midiNote']
     notes.push(note)
     midiNotes.push(midi)
@@ -264,10 +264,10 @@ async function streamMidi() {
       for (let noteIndex = 0; noteIndex < notesPerMeasure; noteIndex++) {
         const randomNotes = randomNote(keyRange);
         const midiNotes = randomNotes["midiNotes"];
+        const notes = randomNotes["notes"];
         const noteDuration = getNoteDurationInMs(randomDuration());
-
         if (!shouldSkipBeat()) {
-          await sendMidi(midiNotes, velocity, channel, noteDuration);
+          await sendMidi(midiNotes, notes, velocity, channel, noteDuration);
         } else {
           await sleep(noteDuration); // Rest for the duration of the skipped beat
         }
