@@ -3,6 +3,7 @@ const {
   Midi,
   Chord
 } = require("tonal");
+
 const MidiWriter = require('midi-writer-js');
 const fs = require('fs');
 const yargs = require('yargs');
@@ -13,6 +14,7 @@ const prompt = require('prompt-sync')();
 const argv = parseCommandLineArguments();
 
 const {
+  arp,
   noteSpread,
   bpm,
   phraseCount,
@@ -42,6 +44,7 @@ function parseCommandLineArguments() {
   const argv = yargs(hideBin(process.argv)).argv;
 
   return {
+    arp: argv.arp || "",
     noteSpread: argv.note_spread || 1,
     bpm: argv.bpm || 120,
     phraseCount: argv.phrase_count || 1,
@@ -86,6 +89,7 @@ printConfiguration();
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
 function getNotesPerBeat(noteDuration) {
   switch (noteDuration) {
     // whole note
@@ -133,9 +137,20 @@ function getNotesPerBeat(noteDuration) {
       return 16
   }
 }
-// get command line arguments
 
-console.log(`time signature: ${timeSignature}`)
+function generateArpeggio(midiNotes, direction) {
+  if (direction === "u") {
+    return midiNotes.sort((a, b) => a - b);
+  } else if (direction === "d") {
+    return midiNotes.sort((a, b) => b - a);
+  } else if (direction === "ud") {
+    const up = midiNotes.sort((a, b) => a - b);
+    const down = midiNotes.slice().sort((a, b) => b - a);
+    return up.concat(down);
+  }
+  return midiNotes;
+}
+
 const timeSignatureArr = timeSignature.split("/")
 const timeSignatureTop = timeSignatureArr[0]
 const timeSignatureBottom = timeSignatureArr[1]
@@ -211,29 +226,32 @@ function getNoteDurationInMs(noteDuration) {
   return beatDurationInMs / notesPerBeat;
 }
 
+
 // function that sends midi notes
 async function sendMidi(midiNotes, notes, velocity, channel, noteDuration) {
-  console.log(`midi => ${[midiNotes]} (${[notes]})`);
-  // send midi note on signals for all notes in the chord simultaneously
-  midiNotes.forEach((midiNote) => {
+  for (let i = 0; i < midiNotes.length; i++) {
+    const midiNote = midiNotes[i];
+    const note = notes[i];
+
+    console.log(`midi => ${midiNote} (${note})`);
+
+    // send midi note on signal for the current note
     output.send("noteon", {
       note: midiNote,
       velocity: velocity,
       channel: channel,
     });
-  });
 
-  // wait for the noteDuration time
-  await sleep(noteDuration);
+    // wait for the noteDuration time
+    await sleep(noteDuration);
 
-  // send note off signals for all notes in the chord simultaneously
-  midiNotes.forEach((midiNote) => {
+    // send note off signal for the current note
     output.send("noteoff", {
       note: midiNote,
       velocity: velocity,
       channel: channel,
     });
-  });
+  }
 }
 
 // function that creates randomly sized smaller arrays that fluctuate in length between 1 and the noteSpread value
@@ -300,15 +318,22 @@ async function streamMidi() {
       let measure = 0; measure < phraseNotesCount / notesPerMeasure; measure++
     ) {
       for (let noteIndex = 0; noteIndex < notesPerMeasure; noteIndex++) {
-        const randomChord = getRandomChord()
+        const randomChord = getRandomChord();
         const randomNotes = randomNote(keyRange);
-        const midiNotes = playChords === true ? randomChord['chordMidiNotes'] : randomNotes["midiNotes"];
-        const notes = playChords === true ? randomChord['randomChordNotes'] : randomNotes["notes"];
+        let midiNotes = playChords === true ? randomChord["chordMidiNotes"] : randomNotes["midiNotes"];
+        const notes = playChords === true ? randomChord["randomChordNotes"] : randomNotes["notes"];
+
+        if (arp) {
+          midiNotes = generateArpeggio(midiNotes, arp);
+        }
+
         const noteDuration = getNoteDurationInMs(randomDuration());
         if (!shouldSkipBeat()) {
-          await sendMidi(midiNotes, notes, velocity, channel, noteDuration);
+          for (const midiNote of midiNotes) {
+            await sendMidi([midiNote], [notes], velocity, channel, noteDuration);
+          }
         } else {
-          await sleep(noteDuration); // Rest for the duration of the skipped beat
+          await sleep(noteDuration * midiNotes.length); // Rest for the duration of the skipped beat
         }
       }
     }
