@@ -16,6 +16,7 @@ const argv = parseCommandLineArguments();
 const {
   arp,
   noteSpread,
+  randomizeNoteSpread,
   bpm,
   phraseCount,
   playChords,
@@ -46,6 +47,7 @@ function parseCommandLineArguments() {
   return {
     arp: argv.arp || "",
     noteSpread: argv.note_spread || 1,
+    randomizeNoteSpread: argv.randomize_note_spread || false,
     bpm: argv.bpm || 120,
     phraseCount: argv.phrase_count || 1,
     playChords: argv.play_chords || false,
@@ -95,44 +97,44 @@ function getNotesPerBeat(noteDuration) {
     // whole note
     case "1":
       return 0.25
-      // half note
+    // half note
     case "2":
       return 0.5
-      // dotted half note
+    // dotted half note
     case "d2":
       return 0.875
-      // quarter note
+    // quarter note
     case "4":
       return 1
-      // triplet quarter note
+    // triplet quarter note
     case "4t":
       return 1.5
-      // dotted quarter note
+    // dotted quarter note
     case "d4":
       return 1.5
     case "dd4":
       return 1.75
-      // eighth note
+    // eighth note
     case "8":
       return 2
-      // triplet eighth note
+    // triplet eighth note
     case "8t":
       return 3
-      // dotted eighth note
+    // dotted eighth note
     case "d8":
       return 3
     case "dd8":
       return 3.5
-      // sixteenth note
+    // sixteenth note
     case "16":
       return 4
-      // triplet sixteenth note
+    // triplet sixteenth note
     case "16t":
       return 6
-      // thirty-second note
+    // thirty-second note
     case "32":
       return 8
-      // sixty-fourth note
+    // sixty-fourth note
     case "64":
       return 16
   }
@@ -168,17 +170,17 @@ console.log(`skip beats chance: ${percentage}%`)
 
 // function that selects a random chord from the chords const
 function getRandomChord() {
-  const randomOctave = Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
-  const randomChord = chords[Math.floor(Math.random() * chords.length)];
-  console.log(randomChord)
+  let randomOctave = Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
+  let randomChord = chords[Math.floor(Math.random() * chords.length)];
   let chordNotes = Chord.getChord(randomChord, key)['notes']
+  let chordNotesLength = chordNotes.length
   let chordMidiNotes = []
   // pick a random set of notes from chordNotes with a min of 1 and max of noteSpread
-  const randomNoteCount = Math.floor(Math.random() * (noteSpread - 1 + 1)) + 1;
-  console.log(`random note count: ${randomNoteCount}`)
+  let noteCount = randomizeNoteSpread ? Math.floor(Math.random() * (noteSpread - 1 + 1)) + 1 : noteSpread
+  console.log(`${randomizeNoteSpread ? "random " : ""}note count: ${noteCount}`)
   let randomChordNotes = []
   // pick random notes from chordNotes
-  for (let i = 0; i < randomNoteCount; i++) {
+  for (let i = 0; i < noteCount; i++) {
     let randomNote = chordNotes[Math.floor(Math.random() * chordNotes.length)];
     randomChordNotes.push(randomNote)
   }
@@ -188,7 +190,10 @@ function getRandomChord() {
   }
   return {
     randomChordNotes,
-    chordMidiNotes
+    chordMidiNotes,
+    randomChord,
+    randomOctave,
+    chordNotesLength
   }
 }
 
@@ -210,8 +215,8 @@ if (outputs.length === 0) {
   const selectedOutput = prompt('Select an output: ');
   select = Number(selectedOutput) - 1;
   var output = new easymidi.Output(outputs[select]);
-  
-// if only one is found, use that one
+
+  // if only one is found, use that one
 } else {
   var output = new easymidi.Output(outputs[0]);
 }
@@ -228,30 +233,33 @@ function getNoteDurationInMs(noteDuration) {
 
 
 // function that sends midi notes
-async function sendMidi(midiNotes, notes, velocity, channel, noteDuration) {
-  for (let i = 0; i < midiNotes.length; i++) {
-    const midiNote = midiNotes[i];
-    const note = notes[i];
+async function sendMidi(midiNotes, notes, velocity, channel, noteDuration, chordName) {
 
-    console.log(`midi => ${midiNote} (${note})`);
-
-    // send midi note on signal for the current note
+  if (!playChords) {
+    console.log(`${notes}`)
+  } else {
+    console.log(`${key} ${chordName} (${notes})`)
+  }
+  // send noteon signals for all notes in the chord
+  midiNotes.forEach((midiNote, i) => {
     output.send("noteon", {
       note: midiNote,
       velocity: velocity,
       channel: channel,
     });
+  });
 
-    // wait for the noteDuration time
-    await sleep(noteDuration);
+  // wait for the noteDuration time
+  await sleep(noteDuration);
 
-    // send note off signal for the current note
+  // send noteoff signals for all notes in the chord
+  midiNotes.forEach((midiNote, i) => {
     output.send("noteoff", {
       note: midiNote,
       velocity: velocity,
       channel: channel,
     });
-  }
+  });
 }
 
 // function that creates randomly sized smaller arrays that fluctuate in length between 1 and the noteSpread value
@@ -272,7 +280,7 @@ const randomNote = (range) => {
   // variable that sets to a random value between 1 and the noteSpread value
   const ns = noteSpread;
   // loop through the noteSpread value and push a random note to the notes array
-  
+
   for (let i = 0; i < ns; i++) {
     if (i === 0 || Math.random() < 1 / ns) {
       let res = randomIndex(range);
@@ -319,18 +327,25 @@ async function streamMidi() {
     ) {
       for (let noteIndex = 0; noteIndex < notesPerMeasure; noteIndex++) {
         const randomChord = getRandomChord();
+        const randomChordLenth = randomChord["chordNotesLength"];
         const randomNotes = randomNote(keyRange);
         let midiNotes = playChords === true ? randomChord["chordMidiNotes"] : randomNotes["midiNotes"];
         const notes = playChords === true ? randomChord["randomChordNotes"] : randomNotes["notes"];
+        const chordName = playChords === true ? randomChord["randomChord"] : null; 
 
         if (arp) {
           midiNotes = generateArpeggio(midiNotes, arp);
         }
-
+        
         const noteDuration = getNoteDurationInMs(randomDuration());
+
         if (!shouldSkipBeat()) {
-          for (const midiNote of midiNotes) {
-            await sendMidi([midiNote], [notes], velocity, channel, noteDuration);
+          if (arp || playChords === false) {
+            for (const midiNote of midiNotes) {
+              await sendMidi([midiNote], [notes], velocity, channel, noteDuration, chordName);
+            }
+          } else {
+            await sendMidi(midiNotes, notes, velocity, channel, noteDuration, chordName);
           }
         } else {
           await sleep(noteDuration * midiNotes.length); // Rest for the duration of the skipped beat
@@ -366,7 +381,7 @@ process.on('SIGQUIT', () => {
 }); // Keyboard quit
 process.on('SIGTERM', () => {
   kill()
-}); 
+});
 
 // check if the user wants to generate a midi stream
 if (generateMidiStream == "true") {
