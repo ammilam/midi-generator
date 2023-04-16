@@ -29,7 +29,10 @@ To run the project, use the following command:
 
 Parameters:
 To generate MIDI files, the app.js file has various command line parameters. The parameters are:
+- arp: if set, correlates to arpeggio direction, either "u" (up), "d" (down), or "ud" (up-down)
+- play_chords: play through random chords instead of individual notes (true/false)
 - note_spread: corresponds to how many notes can potentially sit on top of each other, potentially representing a chord
+- randomize_note_spread: will select a random length between 1 and the value of note_spread to generate randomly sized chords
 - bpm: set the beats per minute (default 120)
 - phrase_count: set the number of phrases to be generated (default 1)
 - phrase_notes_count: set the number of notes in each phrase (default 32)
@@ -48,7 +51,7 @@ To generate a MIDI stream, set the following parameters:
 - skip_notes_chance: set the chance that a notes played in a measure will be randomly skipped (default "0.0", range 0.0 to 0.99)
 
 ```bash
-./midi-generator-<arch> --key=D# --mode=dorian --note_spread=3 --bpm=140 --velocity=100 --generate_midi_stream="true" --midi_channel=7
+./midi-generator-<arch> --key=D# --mode=dorian --note_spread=3 --bpm=140 --velocity=100 --generate_midi_stream="true" --midi_channel=7 --randomize_note_spread
 ```
 
 ##### note_durations parameters
