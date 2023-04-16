@@ -38,29 +38,47 @@ const {
   generateMidiStream
 } = argv;
 
+
+
 const track = new MidiWriter.Track()
 track.setTempo(bpm);
 
-function parseCommandLineArguments() {
-  const argv = yargs(hideBin(process.argv)).argv;
 
+
+function parseCommandLineArguments() {
+  let argv = yargs(hideBin(process.argv)).argv;
+  const switchToTripletChance = argv.triplet_chance || 0.0; // 0% chance to switch to triplet note durations
+
+  function randomTripletNoteDuration(duration) {
+    if (Math.random() < switchToTripletChance) {
+      return duration + "t";
+    }
+    return duration;
+  }
   function getNoteLengthsConfig() {
+    console.log(typeof argv.note_durations)
     switch (true) {
       case typeof argv.note_durations == "array":
-        return argv.note_durations;
+        return argv.note_durations.map(randomTripletNoteDuration);
       case typeof argv.note_durations == "string":
-        return argv.note_durations.split(',').map(String);
+        return argv.note_durations
+          .split(",")
+          .map(String)
+          .map(randomTripletNoteDuration);
       case typeof argv.note_duration == "array":
-        return argv.note_duration;
+        return argv.note_duration.map(randomTripletNoteDuration);
       case typeof argv.note_duration == "object":
-        let str = argv.note_duration.map(String)
-        return str;
+        let str = argv.note_duration.map(String);
+        return str.map(randomTripletNoteDuration);
+      case typeof argv.note_durations == "number":
+        return [argv.note_durations.toString()];
+      case typeof argv.note_duration == "number":
+        return [argv.note_duration.toString()];
       default:
-
-        return ["16", "8"];
+        return ["16", "8"].map(randomTripletNoteDuration);
     }
   }
-  
+
   const noteLengths = getNoteLengthsConfig();
   return {
     arp: argv.arp || "",
