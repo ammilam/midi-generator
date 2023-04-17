@@ -29,14 +29,17 @@ To run the project, use the following command:
 
 Parameters:
 To generate MIDI files, the app.js file has various command line parameters. The parameters are:
+- note_durations: set the durations of the notes. The durations take integer values like 1, 2, 3 etc, where each integer represents a particular note length. 'd' prefixed to the integer represents a dotted note of that duration. 't' suffixed to an integer represents a triplet of that duration.
 - arp: if set, correlates to arpeggio direction, either "u" (up), "d" (down), or "ud" (up-down)
 - play_chords: play through random chords instead of individual notes (true/false)
+- triplet_chance: chance that the note will switch to a triplet note duration at random
+- generate_midi_stream: set this parameter to "true" (default is "true"). This will continuously generate MIDI notes until the program is terminated. If set to "false", a midi file will be generated 
+- skip_notes_chance: chance that a notes played in a measure will be randomly skipped (default "0.0", range 0.0 to 0.99)
 - note_spread: corresponds to how many notes can potentially sit on top of each other, potentially representing a chord
 - randomize_note_spread: will select a random length between 1 and the value of note_spread to generate randomly sized chords
 - bpm: set the beats per minute (default 120)
 - phrase_count: set the number of phrases to be generated (default 1)
 - phrase_notes_count: set the number of notes in each phrase (default 32)
-- note_durations: set the durations of the notes. The durations take integer values like 1, 2, 3 etc, where each integer represents a particular note length. 'd' prefixed to the integer represents a dotted note of that duration. 't' suffixed to an integer represents a triplet of that duration.
 - min_octave: set the minimum octave range (default 1)
 - max_octave: set the maximum octave range (default 5)
 - key: set the key of the scale (default "C")
