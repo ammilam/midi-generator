@@ -98,7 +98,7 @@ function parseCommandLineArguments() {
     keyRange: Scale.rangeOf(`${argv.key || "C"} ${argv.mode || "major"}`)(`${argv.key || "C"}${argv.min_octave || 1}`, `${argv.key || "C"}${argv.max_octave || 5}`),
     fileName: argv.file_name || `${argv.key || "C"}-${argv.mode || "major"}-midi-file-${(new Date()).toISOString()}.mid`,
     outputPath: argv.output_path || './',
-    generateMidiStream: argv.generate_midi_stream || "false"
+    generateMidiStream: argv.generate_midi_stream || "true"
   };
 }
 
@@ -209,7 +209,6 @@ function getRandomChord() {
   let chordMidiNotes = []
   // pick a random set of notes from chordNotes with a min of 1 and max of noteSpread
   let noteCount = randomizeNoteSpread ? Math.floor(Math.random() * (noteSpread - 1 + 1)) + 1 : noteSpread
-  console.log(`${randomizeNoteSpread ? "random " : ""}note count: ${noteCount}`)
   let randomChordNotes = []
   // pick random notes from chordNotes
   for (let i = 0; i < noteCount; i++) {
