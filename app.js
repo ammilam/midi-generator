@@ -3,175 +3,242 @@ const {
   Midi,
   Chord
 } = require("tonal");
+
+// import dependencies
 const MidiWriter = require('midi-writer-js');
 const fs = require('fs');
 const yargs = require('yargs');
 const hideBin = require('yargs/helpers').hideBin;
+const easymidi = require('easymidi');
+const prompt = require('prompt-sync')();
 
-const argv = yargs(hideBin(process.argv)).argv
+const argv = parseCommandLineArguments();
+
+const {
+  arp,
+  noteSpread,
+  randomizeNoteSpread,
+  bpm,
+  phraseCount,
+  playChords,
+  velocity,
+  channel,
+  phraseNotesCount,
+  noteLengths,
+  timeSignature,
+  minOctave,
+  maxOctave,
+  skipNotesChance,
+  key,
+  mode,
+  scale,
+  chords,
+  keyRange,
+  fileName,
+  outputPath,
+  generateMidiStream
+} = argv;
+
+
+// Create a new midi track
+const track = new MidiWriter.Track()
+// Set the tempo
+track.setTempo(bpm);
+
+
+// Parse command line arguments
+function parseCommandLineArguments() {
+  let argv = yargs(hideBin(process.argv)).argv;
+
+  // function to parse note durations
+  function getNoteLengthsConfig() {
+
+    const switchToTripletChance = argv.triplet_chance || 0.0; // 0% chance to switch to triplet note durations
+    // function to randomize note durations by randomly switching to triplet note durations
+    function randomTripletNoteDuration(duration) {
+      if (Math.random() < switchToTripletChance) {
+        return duration + "t";
+      }
+      return duration;
+    }
+
+    // parse note durations
+    switch (true) {
+      case typeof argv.note_durations == "array":
+        return argv.note_durations.map(randomTripletNoteDuration);
+      case typeof argv.note_durations == "string":
+        return argv.note_durations
+          .split(",")
+          .map(String)
+          .map(randomTripletNoteDuration);
+      case typeof argv.note_durations == "number":
+        return [argv.note_durations].map(String).map(randomTripletNoteDuration);
+      case typeof argv.note_durations == "undefined":
+        return ["16", "8"].map(randomTripletNoteDuration);
+    }
+  }
+
+  const noteLengths = getNoteLengthsConfig();
+
+  return {
+    arp: argv.arp || "",
+    noteSpread: argv.note_spread || 1,
+    randomizeNoteSpread: argv.randomize_note_spread || false,
+    bpm: argv.bpm || 120,
+    noteLengths,
+    phraseCount: argv.phrase_count || 1,
+    playChords: argv.play_chords || false,
+    velocity: Number(argv.velocity) || 127,
+    channel: Number(argv.midi_channel) || 1,
+    phraseNotesCount: argv.phrase_notes_count || 32,
+    timeSignature: argv.time_signature || "4/4",
+    minOctave: argv.min_octave || 1,
+    maxOctave: argv.max_octave || 5,
+    skipNotesChance: parseFloat(argv.skip_notes_chance) || parseFloat(0.0),
+    key: argv.key || "C",
+    mode: argv.mode || "major",
+    scale: `${argv.key || "C"} ${argv.mode || "major"}`,
+    chords: Scale.scaleChords(`${argv.key || "C"} ${argv.mode || "major"}`),
+    keyRange: Scale.rangeOf(`${argv.key || "C"} ${argv.mode || "major"}`)(`${argv.key || "C"}${argv.min_octave || 1}`, `${argv.key || "C"}${argv.max_octave || 5}`),
+    fileName: argv.file_name || `${argv.key || "C"}-${argv.mode || "major"}-midi-file-${(new Date()).toISOString()}.mid`,
+    outputPath: argv.output_path || './',
+    generateMidiStream: argv.generate_midi_stream || "true"
+  };
+}
+
+// function to print configuration
+function printConfiguration() {
+  console.log(`bpm: ${bpm}`);
+  console.log(`phrase count: ${phraseCount}`);
+  console.log(`velocity: ${velocity}`);
+  console.log(`midi channel: ${channel}`);
+  console.log(`phrase notes count: ${phraseNotesCount}`);
+  console.log(`note durations: ${noteLengths}`);
+  console.log(`time signature: ${timeSignature}`);
+  console.log(`min octave: ${minOctave}`);
+  console.log(`max octave: ${maxOctave}`);
+  console.log(`skip beats chance: ${(skipNotesChance * 100).toFixed(2)}%`);
+  console.log(`scale: ${scale}`);
+  console.log(`key range: ${keyRange}`);
+}
+
+printConfiguration();
 
 // sleep function
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-// get current date
-const date = new Date();
-const dateStr = date.toISOString()
-
-// corresponds to how many notes can potentially sit on top of each other, potentially representing a chord
-const noteSpread = argv.note_spread || 1;
-
-// set bpm
-const bpm = argv.bpm || 120;
-console.log(`bpm: ${bpm}`)
-
-// set phrase count
-const phraseCount = argv.phrase_count || 1;
-console.log(`phrase count: ${phraseCount}`)
-
-const playChords = argv.play_chords || false;
-
-// set velocity
-const velocity = Number(argv.velocity) || 127
-console.log(`velocity: ${velocity}`)
-
-//
-const channel = Number(argv.midi_channel) || 1
-console.log(`midi channel: ${channel}`)
-
-// set phrase length
-const phraseNotesCount = argv.phrase_notes_count || 32;
-console.log(`phrase notes count: ${phraseNotesCount}`)
-
-// set note lengths
-const noteLengths = [(argv.note_durations || "16")].map(l => `${l}`)
-console.log(`note lengths: ${noteLengths}`)
 
 function getNotesPerBeat(noteDuration) {
   switch (noteDuration) {
     // whole note
     case "1":
       return 0.25
-      // half note
+    // half note
     case "2":
       return 0.5
-      // dotted half note
+    // dotted half note
     case "d2":
       return 0.875
-      // quarter note
+    // quarter note
     case "4":
       return 1
-      // triplet quarter note
+    // triplet quarter note
     case "4t":
       return 1.5
-      // dotted quarter note
+    // dotted quarter note
     case "d4":
       return 1.5
     case "dd4":
       return 1.75
-      // eighth note
+    // eighth note
     case "8":
       return 2
-      // triplet eighth note
+    // triplet eighth note
     case "8t":
       return 3
-      // dotted eighth note
+    // dotted eighth note
     case "d8":
       return 3
     case "dd8":
       return 3.5
-      // sixteenth note
+    // sixteenth note
     case "16":
       return 4
-      // triplet sixteenth note
+    // triplet sixteenth note
     case "16t":
       return 6
-      // thirty-second note
+    // thirty-second note
     case "32":
       return 8
-      // sixty-fourth note
+    // sixty-fourth note
     case "64":
       return 16
   }
 }
-// get command line arguments
 
-const timeSignature = argv.time_signature || "4/4";
-console.log(`time signature: ${timeSignature}`)
+function generateArpeggio(midiNotes, direction) {
+  if (direction === "u") {
+    return midiNotes.sort((a, b) => a - b);
+  } else if (direction === "d") {
+    return midiNotes.sort((a, b) => b - a);
+  } else if (direction === "ud") {
+    const up = midiNotes.sort((a, b) => a - b);
+    const down = midiNotes.slice().sort((a, b) => b - a);
+    return up.concat(down);
+  }
+  return midiNotes;
+}
+
 const timeSignatureArr = timeSignature.split("/")
 const timeSignatureTop = timeSignatureArr[0]
 const timeSignatureBottom = timeSignatureArr[1]
 const notesPerBeat = getNotesPerBeat(noteLengths[0])
 const notesPerMeasure = timeSignatureTop * notesPerBeat
+
 console.log(`notes per measure: ${notesPerMeasure}`)
 
-
-// set octave range
-const minOctave = argv.min_octave || 1;
-console.log(`min octave: ${minOctave}`)
-const maxOctave = argv.max_octave || 5;
-console.log(`max octave: ${maxOctave}`)
-
-// set skip beats chance
-// set to float
-
-const skipNotesChance = parseFloat(argv.skip_notes_chance) || parseFloat(0.0);
 const percentage = (skipNotesChance * 100).toFixed(2)
 console.log(`skip beats chance: ${percentage}%`)
-// set key and mode
-const key = argv.key || "C";
-const mode = argv.mode || "major";
 
-// set scale
-const scale = `${key} ${mode}`
-console.log(`scale: ${scale}`)
-
-const chords = Scale.scaleChords(scale);
 
 // function that selects a random chord from the chords const
 function getRandomChord() {
-  const randomOctave = Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
-  const randomChord = chords[Math.floor(Math.random() * chords.length)];
-  console.log(randomChord)
+  // select a random octave from the range to play the chord in
+  let randomOctave = Math.floor(Math.random() * (maxOctave - minOctave + 1)) + minOctave;
+  // select a random chord from the chords const
+  let randomChord = chords[Math.floor(Math.random() * chords.length)];
+  // get the notes of the chord
   let chordNotes = Chord.getChord(randomChord, key)['notes']
+  // get the length of the chord notes array
+  let chordNotesLength = chordNotes.length
+  // array to hold the midi notes of the chord
   let chordMidiNotes = []
   // pick a random set of notes from chordNotes with a min of 1 and max of noteSpread
-  const randomNoteCount = Math.floor(Math.random() * (noteSpread - 1 + 1)) + 1;
-  console.log(`random note count: ${randomNoteCount}`)
+  let noteCount = randomizeNoteSpread ? Math.floor(Math.random() * (noteSpread - 1 + 1)) + 1 : noteSpread
+  // array to hold the random notes from chordNotes
   let randomChordNotes = []
   // pick random notes from chordNotes
-  for (let i = 0; i < randomNoteCount; i++) {
+  for (let i = 0; i < noteCount; i++) {
     let randomNote = chordNotes[Math.floor(Math.random() * chordNotes.length)];
     randomChordNotes.push(randomNote)
   }
+  // convert the random notes to midi notes
   for (note of randomChordNotes) {
     let midiNote = Midi.toMidi(`${note}${randomOctave}`)
     chordMidiNotes.push(midiNote)
   }
+  // return the random notes, midi notes, chord, octave, and length of chord notes
   return {
     randomChordNotes,
-    chordMidiNotes
+    chordMidiNotes,
+    randomChord,
+    randomOctave,
+    chordNotesLength
   }
 }
 
-// get range of notes in a scale
-const range = Scale.rangeOf(scale);
-
-// get a range of notes of the scale
-const keyRange = range(`${key}${minOctave}`, `${key}${maxOctave}`)
-console.log(`key range: ${keyRange}`)
-
-// set file name
-const fileName = argv.file_name || `${key}-${mode}-midi-file-${dateStr}.mid`
-// set output path
-let outputPath = argv.output_path || './'
-
-const generateMidiStream = argv.generate_midi_stream || "false";
-
-var easymidi = require('easymidi');
-
-const prompt = require('prompt-sync')()
-
+// get the midi outputs of the system running the script
 var outputs = easymidi.getOutputs();
 
 // if no outputs are found, create one
@@ -179,37 +246,48 @@ if (outputs.length === 0) {
   console.log('No outputs found!, initializing one');
   output = new easymidi.Output('Midi Generator', true);
 
-  // if more than one is found, use that one
+  // if more than one is found, prompt the user to select one
 } else if (outputs.length > 1) {
   console.log('Multiple outputs found!, please select one');
   for (let i = 0; i < outputs.length; i++) {
     let number = i + 1;
     console.log(`${number} - ${outputs[i]}`);
   }
+  // prompt the user to select an output
   const selectedOutput = prompt('Select an output: ');
+  // subtract 1 from the selected output to get the index of the output
   select = Number(selectedOutput) - 1;
+  // create a new output using the selected output
   var output = new easymidi.Output(outputs[select]);
-  
-// if only one is found, use that one
+
+  // if only one is found, use that one
 } else {
   var output = new easymidi.Output(outputs[0]);
 }
-// var output = new easymidi.Output('Midi Generator', true);
+// send a clock signal to the output
 output.send('clock');
+// send a start signal to the output
 output.send('start');
 
-
+// function that gets the duration of a note in ms
 function getNoteDurationInMs(noteDuration) {
   const beatDurationInMs = (60 * 1000) / bpm;
   const notesPerBeat = getNotesPerBeat(noteDuration);
   return beatDurationInMs / notesPerBeat;
 }
 
+
 // function that sends midi notes
-async function sendMidi(midiNotes, notes, velocity, channel, noteDuration) {
-  console.log(`midi => ${[midiNotes]} (${[notes]})`);
-  // send midi note on signals for all notes in the chord simultaneously
-  midiNotes.forEach((midiNote) => {
+async function sendMidi(midiNotes, notes, velocity, channel, noteDuration, chordName) {
+
+  // if playChords is false, only log the notes
+  if (!playChords) {
+    console.log(`${notes}`)
+  } else {
+    console.log(`${key} ${chordName} (${notes})`)
+  }
+  // send noteon signals for all notes in the chord
+  midiNotes.forEach((midiNote, i) => {
     output.send("noteon", {
       note: midiNote,
       velocity: velocity,
@@ -220,19 +298,22 @@ async function sendMidi(midiNotes, notes, velocity, channel, noteDuration) {
   // wait for the noteDuration time
   await sleep(noteDuration);
 
-  // send note off signals for all notes in the chord simultaneously
-  midiNotes.forEach((midiNote) => {
+  // send noteoff signals for all notes in the chord
+  midiNotes.forEach((midiNote, i) => {
     output.send("noteoff", {
       note: midiNote,
       velocity: velocity,
       channel: channel,
     });
   });
+
 }
 
 // function that creates randomly sized smaller arrays that fluctuate in length between 1 and the noteSpread value
 function randomIndex(items) {
+  // select a random note from the items array
   let note = items[items.length * Math.random() | 0];
+  // convert the note to a midi note
   let midiNote = Midi.toMidi(note)
   let obj = {
     note,
@@ -248,7 +329,8 @@ const randomNote = (range) => {
   // variable that sets to a random value between 1 and the noteSpread value
   const ns = noteSpread;
   // loop through the noteSpread value and push a random note to the notes array
-  
+
+  // push random notes to the notes array until the noteSpread value is reached
   for (let i = 0; i < ns; i++) {
     if (i === 0 || Math.random() < 1 / ns) {
       let res = randomIndex(range);
@@ -264,11 +346,8 @@ const randomNote = (range) => {
   };
 };
 
-// initialize a new midi track
-const track = new MidiWriter.Track()
-track.setTempo(bpm)
 
-// generate a beat
+// generate a beat, used when generating a midi file
 function generateBeat() {
   let beat = []
   for (let i = 0; i < phraseNotesCount; i++) {
@@ -280,6 +359,7 @@ function generateBeat() {
   return beat
 }
 
+// function that determines if a note should be skipped
 function shouldSkipBeat() {
   return Math.random() < skipNotesChance;
 }
@@ -294,24 +374,54 @@ const randomDuration = () => {
 async function streamMidi() {
   while (true) {
     for (
-      let measure = 0; measure < phraseNotesCount / notesPerMeasure; measure++
+      // loop through the number of measures
+      let measure = 0; measure < notesPerMeasure; measure++
     ) {
+      // loop through the number of notes per measure
       for (let noteIndex = 0; noteIndex < notesPerMeasure; noteIndex++) {
-        const randomChord = getRandomChord()
+        // get a random chord
+        const randomChord = getRandomChord();
+        // get the length of the chord
+        const randomChordLength = randomChord["chordNotesLength"];
+        // get the notes in the chord
         const randomNotes = randomNote(keyRange);
-        const midiNotes = playChords === true ? randomChord['chordMidiNotes'] : randomNotes["midiNotes"];
-        const notes = playChords === true ? randomChord['randomChordNotes'] : randomNotes["notes"];
-        const noteDuration = getNoteDurationInMs(randomDuration());
+        // get the midi notes
+        let midiNotes = playChords === true ? randomChord["chordMidiNotes"] : randomNotes["midiNotes"];
+        // get the notes
+        const notes = playChords === true ? randomChord["randomChordNotes"] : randomNotes["notes"];
+        // get the chord name
+        const chordName = playChords === true ? randomChord["randomChord"] : null;
+
+        // if arp is true, generate an arpeggio
+        if (arp) {
+          midiNotes = generateArpeggio(midiNotes, arp);
+        }
+
+        // randomly generate a velocity
+        const randomVelocity = Math.floor(Math.random() * (velocity - 50)) + 50;
+        // randomly adjust note duration based on predefined rhythmic patterns
+        const randomPatternIndex = Math.floor(Math.random() * noteLengths.length);
+        // get the duration of the note
+        const noteDuration = getNoteDurationInMs(noteLengths[randomPatternIndex]);
+
+        // if the note should not be skipped, send the midi notes
         if (!shouldSkipBeat()) {
-          await sendMidi(midiNotes, notes, velocity, channel, noteDuration);
+          if (arp || playChords === false) {
+            for (const midiNote of midiNotes) {
+              await sendMidi([midiNote], [notes], randomVelocity, channel, noteDuration, chordName, noteIndex);
+            }
+          } else {
+            await sendMidi(midiNotes, notes, randomVelocity, channel, noteDuration, chordName, noteIndex);
+          }
         } else {
-          await sleep(noteDuration); // Rest for the duration of the skipped beat
+          await sleep(noteDuration * midiNotes.length); // Rest for the duration of the skipped beat
         }
       }
     }
   }
 }
 
+// function that kills the process and sends noteoff signals
 function kill() {
   for (let i = 0; i < 127; i++) {
     output.send("noteoff", {
@@ -324,11 +434,6 @@ function kill() {
   process.exit(0)
 }
 
-//detect when the enter key is pressed
-// process.stdin.setRawMode(true);
-// process.stdin.resume();
-// const skip = process.stdin.on('data', () => { return true }) || false
-
 // handle process signals
 process.on('SIGINT', () => {
   kill()
@@ -338,7 +443,7 @@ process.on('SIGQUIT', () => {
 }); // Keyboard quit
 process.on('SIGTERM', () => {
   kill()
-}); 
+});
 
 // check if the user wants to generate a midi stream
 if (generateMidiStream == "true") {
