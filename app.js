@@ -47,16 +47,18 @@ track.setTempo(bpm);
 
 function parseCommandLineArguments() {
   let argv = yargs(hideBin(process.argv)).argv;
-  const switchToTripletChance = argv.triplet_chance || 0.0; // 0% chance to switch to triplet note durations
 
-  function randomTripletNoteDuration(duration) {
-    if (Math.random() < switchToTripletChance) {
-      return duration + "t";
-    }
-    return duration;
-  }
   function getNoteLengthsConfig() {
-    console.log(typeof argv.note_durations)
+
+    const switchToTripletChance = argv.triplet_chance || 0.0; // 0% chance to switch to triplet note durations
+
+    function randomTripletNoteDuration(duration) {
+      if (Math.random() < switchToTripletChance) {
+        return duration + "t";
+      }
+      return duration;
+    }
+
     switch (true) {
       case typeof argv.note_durations == "array":
         return argv.note_durations.map(randomTripletNoteDuration);
@@ -65,21 +67,15 @@ function parseCommandLineArguments() {
           .split(",")
           .map(String)
           .map(randomTripletNoteDuration);
-      case typeof argv.note_duration == "array":
-        return argv.note_duration.map(randomTripletNoteDuration);
-      case typeof argv.note_duration == "object":
-        let str = argv.note_duration.map(String);
-        return str.map(randomTripletNoteDuration);
       case typeof argv.note_durations == "number":
-        return [argv.note_durations.toString()];
-      case typeof argv.note_duration == "number":
-        return [argv.note_duration.toString()];
-      default:
+        return [argv.note_durations].map(String).map(randomTripletNoteDuration);
+      case typeof argv.note_durations == "undefined":
         return ["16", "8"].map(randomTripletNoteDuration);
     }
   }
 
   const noteLengths = getNoteLengthsConfig();
+
   return {
     arp: argv.arp || "",
     noteSpread: argv.note_spread || 1,
@@ -359,7 +355,7 @@ const randomDuration = () => {
 async function streamMidi() {
   while (true) {
     for (
-      let measure = 0; measure < phraseNotesCount / notesPerMeasure; measure++
+      let measure = 0; measure < notesPerMeasure; measure++
     ) {
       for (let noteIndex = 0; noteIndex < notesPerMeasure; noteIndex++) {
         const randomChord = getRandomChord();
@@ -376,9 +372,8 @@ async function streamMidi() {
         // Add: Randomize note velocities
         const randomVelocity = Math.floor(Math.random() * (velocity - 50)) + 50;
         // Add: Adjust note duration based on predefined rhythmic patterns
-        const rhythmicPatterns = noteLengths;
-        const randomPatternIndex = Math.floor(Math.random() * rhythmicPatterns.length);
-        const noteDuration = getNoteDurationInMs(rhythmicPatterns[randomPatternIndex]);
+        const randomPatternIndex = Math.floor(Math.random() * noteLengths.length);
+        const noteDuration = getNoteDurationInMs(noteLengths[randomPatternIndex]);
 
         if (!shouldSkipBeat()) {
           if (arp || playChords === false) {
