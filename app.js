@@ -284,7 +284,7 @@ async function sendMidi(midiNotes, notes, velocity, channel, noteDuration, chord
   if (!playChords) {
     console.log(`${notes}`)
   } else {
-    console.log(`${key} ${chordName} (${notes})`)
+    console.log(`${chordName} (${notes})`)
   }
   // send noteon signals for all notes in the chord
   midiNotes.forEach((midiNote, i) => {
